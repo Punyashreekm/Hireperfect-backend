@@ -90,7 +90,11 @@ router.post(
         },
       });
     } catch (error) {
-      return res.status(500).json({ message: "Login failed" });
+      console.error("Login route error:", error);
+      if (error && String(error.message || "").includes("buffering timed out")) {
+        return res.status(503).json({ message: "Database unavailable. Please retry." });
+      }
+      return res.status(500).json({ message: "Login failed. Please try again." });
     }
   }
 );

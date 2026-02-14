@@ -14,6 +14,7 @@ const { seedDefaultExams } = require("./utils/seedExams");
 const { seedAdminUser } = require("./utils/seedAdmin");
 
 const app = express();
+mongoose.set("bufferCommands", false);
 
 app.use(helmet());
 app.use(
@@ -39,15 +40,13 @@ app.use(
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log("Connected to MongoDB");
-    await seedDefaultExams();
-    await seedAdminUser();
-    console.log("Default exam catalog ready");
-  })
-  .catch((err) => console.error("MongoDB connection error:", err));
+// Fail fast instead of hanging on buffered Mongo operations when DB is down.
+app.use("/api", (_req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ message: "Database unavailable. Please retry." });
+  }
+  next();
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/exams", examRoutes);
@@ -56,9 +55,16 @@ app.use("/api/candidate", candidateRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.get("/api/health", (_req, res) => {
+  const stateMap = {
+    0: "disconnected",
+    1: "connected",
+    2: "connecting",
+    3: "disconnecting",
+  };
   res.json({
     status: "OK",
     service: "Hireperfect API",
+    database: stateMap[mongoose.connection.readyState] || "unknown",
     timestamp: new Date().toISOString(),
   });
 });
@@ -73,6 +79,24 @@ app.use("*", (_req, res) => {
 });
 
 const PORT = process.env.PORT || 5500;
-app.listen(PORT, () => {
-  console.log(`Hireperfect backend running on port ${PORT}`);
-});
+
+async function startServer() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 8000,
+    });
+    console.log("Connected to MongoDB");
+    await seedDefaultExams();
+    await seedAdminUser();
+    console.log("Default exam catalog ready");
+
+    app.listen(PORT, () => {
+      console.log(`Hireperfect backend running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
