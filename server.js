@@ -20,14 +20,20 @@ app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 200,
-  })
+  }),
 );
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174", process.env.FRONTEND_URL].filter(Boolean),
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      process.env.FRONTEND_URL,
+      "https://hireperfect-frontend.vercel.app",
+      "https://hireperfect-admin.vercel.app",
+    ].filter(Boolean),
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: "5mb" }));
@@ -50,7 +56,11 @@ app.use("/api/candidate", candidateRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "OK", service: "Hireperfect API", timestamp: new Date().toISOString() });
+  res.json({
+    status: "OK",
+    service: "Hireperfect API",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.use((err, _req, res, _next) => {
